@@ -515,7 +515,7 @@ ${tableRows}`;
   ].join("\n");
 }
 
-function buildIssueBody({ generatedAtIso, primarySinceIso, primaryGrouped, primaryTotal, extendedSinceIso, extendedGrouped, extendedTotal }) {
+function buildIssueBody({ generatedAtIso, primarySinceIso, primaryGrouped, primaryTotal }) {
   const primary = buildMarkdownWindow({
     title: "Last 24 Hours",
     grouped: primaryGrouped,
@@ -524,20 +524,10 @@ function buildIssueBody({ generatedAtIso, primarySinceIso, primaryGrouped, prima
     generatedAtIso
   });
 
-  const extended = buildMarkdownWindow({
-    title: "Last 7 Days",
-    grouped: extendedGrouped,
-    total: extendedTotal,
-    sinceIso: extendedSinceIso,
-    generatedAtIso
-  });
-
   return [
     "# Daily Entra Documentation PR Report",
     "",
     primary,
-    "",
-    extended,
     "",
     "Generated automatically by GitHub Actions."
   ].join("\n");
@@ -553,7 +543,7 @@ async function main() {
   const generatedAtIso = generatedAt.toISOString();
 
   const lookbackHours = Number.parseInt(getEnv("LOOKBACK_HOURS", "24"), 10);
-  const extendedLookbackHours = Number.parseInt(getEnv("LOOKBACK_HOURS_EXTENDED", "168"), 10);
+  const extendedLookbackHours = lookbackHours;
   const primarySince = new Date(generatedAt.getTime() - lookbackHours * 60 * 60 * 1000);
   const extendedSince = new Date(generatedAt.getTime() - extendedLookbackHours * 60 * 60 * 1000);
   const primarySinceIso = primarySince.toISOString();
@@ -633,10 +623,7 @@ async function main() {
     generatedAtIso,
     primarySinceIso,
     primaryGrouped: groupedPrimary,
-    primaryTotal: primaryRows.length,
-    extendedSinceIso,
-    extendedGrouped: groupedExtended,
-    extendedTotal: uniqueRows.length
+    primaryTotal: primaryRows.length
   });
 
   const htmlOutputPath = getEnv("REPORT_OUTPUT", "report-output/entra-daily-report.html");
@@ -657,17 +644,15 @@ async function main() {
     title: `Daily Entra Docs PR Report - ${dateLabel}`,
     label: getEnv("ISSUE_LABEL", "entra-docs-report"),
     total24h: primaryRows.length,
-    total7d: uniqueRows.length,
     generatedAtIso,
-    primarySinceIso,
-    extendedSinceIso
+    primarySinceIso
   };
 
   const metadataOutputPath = getEnv("REPORT_METADATA_OUTPUT", "report-output/entra-daily-report.json");
   await fs.mkdir(path.dirname(metadataOutputPath), { recursive: true });
   await fs.writeFile(metadataOutputPath, JSON.stringify(metadata, null, 2), "utf8");
 
-  console.log(`Report created. 24h items: ${primaryRows.length}; 7d items: ${uniqueRows.length}`);
+  console.log(`Report created. 24h items: ${primaryRows.length}`);
   console.log(`Saved HTML report to ${htmlOutputPath}`);
   console.log(`Saved issue body to ${issueOutputPath}`);
   console.log(`Saved report metadata to ${metadataOutputPath}`);

@@ -16,7 +16,6 @@ jobs:
     env:
       TZ: Europe/Amsterdam
       LOOKBACK_HOURS: "24"
-      LOOKBACK_HOURS_EXTENDED: "168"
       ENTRA_DOC_REPOS: "MicrosoftDocs/entra-docs,MicrosoftDocs/azure-docs"
       ENTRA_KEYWORDS: "entra,active-directory,identity,authentication,conditional-access,external-identities,identity-governance,permissions-management,workload-identities"
       AZURE_DOCS_PATH_PREFIXES: "articles/active-directory"
