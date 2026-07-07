@@ -1,0 +1,115 @@
+name: Entra Docs Daily Reporter
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Europe/Amsterdam
+      LOOKBACK_HOURS: "24"
+      ENTRA_DOC_REPOS: "MicrosoftDocs/entra-docs,MicrosoftDocs/azure-docs"
+      ENTRA_KEYWORDS: "entra,active-directory,identity,authentication,conditional-access,external-identities,identity-governance,permissions-management,workload-identities"
+      REPORT_OUTPUT: "report-output/entra-daily-report.html"
+      ISSUE_OUTPUT: "report-output/entra-daily-report.md"
+      REPORT_METADATA_OUTPUT: "report-output/entra-daily-report.json"
+      ISSUE_LABEL: "entra-docs-report"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run only at 07:00 Europe/Amsterdam
+        id: schedule_gate
+        run: |
+          hour=$(date +%H)
+          if [ "$hour" = "07" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping run at hour $hour"
+          fi
+
+      - name: Setup Node.js
+        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
+        run: npm ci
+        working-directory: tools/entra-docs-reporter
+
+      - name: Generate report files
+        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
+        run: npm run report
+        working-directory: tools/entra-docs-reporter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create or update daily issue
+        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const issueBodyPath = path.join('tools/entra-docs-reporter', process.env.ISSUE_OUTPUT);
+            const metadataPath = path.join('tools/entra-docs-reporter', process.env.REPORT_METADATA_OUTPUT);
+            const issueBody = fs.readFileSync(issueBodyPath, 'utf8');
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = metadata.label || process.env.ISSUE_LABEL;
+
+            const labelsResponse = await github.rest.issues.listLabelsForRepo({ owner, repo, per_page: 100 });
+            const hasLabel = labelsResponse.data.some(l => l.name === label);
+            if (!hasLabel) {
+              await github.rest.issues.createLabel({ owner, repo, name: label, color: '0e8a16', description: 'Automated Entra docs report issues' });
+            }
+
+            const title = metadata.title;
+            const found = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${owner}/${repo} is:issue in:title \"${title}\"`
+            });
+
+            if (found.data.items.length > 0) {
+              const issueNumber = found.data.items[0].number;
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                title,
+                body: issueBody,
+                labels: [label]
+              });
+              core.info(`Updated issue #${issueNumber}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body: issueBody,
+                labels: [label]
+              });
+              core.info(`Created issue #${created.data.number}`);
+            }
+
+      - name: Upload HTML artifact
+        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: entra-daily-report
+          path: |
+            tools/entra-docs-reporter/report-output/entra-daily-report.html
+            tools/entra-docs-reporter/report-output/entra-daily-report.md
+            tools/entra-docs-reporter/report-output/entra-daily-report.json

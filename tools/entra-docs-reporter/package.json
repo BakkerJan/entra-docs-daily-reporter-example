@@ -1,0 +1,11 @@
+{
+  "name": "entra-docs-daily-reporter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily report of new Entra-related Microsoft Docs pull requests",
+  "scripts": {
+    "report": "node report.mjs"
+  },
+  "dependencies": {}
+}
