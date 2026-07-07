@@ -21,6 +21,7 @@ jobs:
       AZURE_DOCS_PATH_PREFIXES: "articles/active-directory"
       USE_COMMITS_FOR_AZURE_DOCS: "true"
       AZURE_DOCS_COMMITS_PATH: "articles/active-directory"
+      AZURE_DOCS_SUBPAGES: "app-provisioning,app-proxy,authentication,azuread-dev,cloud-infrastructure-entitlement-management,cloud-sync,conditional-access,develop,devices,enterprise-users,external-identities,fundamentals,governance,hybrid,identity-protection,manage-apps,managed-identities-azure-resources,roles,saas-apps,verify"
       REPORT_OUTPUT: "report-output/entra-daily-report.html"
       ISSUE_OUTPUT: "report-output/entra-daily-report.md"
       REPORT_METADATA_OUTPUT: "report-output/entra-daily-report.json"

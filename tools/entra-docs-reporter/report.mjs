@@ -164,6 +164,38 @@ async function listCommitsByPath(repo, docsPath, token, sinceIso) {
   return items;
 }
 
+async function listCommitsForSubpages(repo, basePath, subpages, token, sinceIso) {
+  const rows = [];
+
+  for (const subpage of subpages) {
+    const pathForCall = `${basePath.replace(/\/+$/, "")}/${subpage.replace(/^\/+/, "")}`;
+    const commits = await listCommitsByPath(repo, pathForCall, token, sinceIso);
+
+    for (const commit of commits) {
+      const createdAt = commit.commit?.author?.date || commit.commit?.committer?.date;
+      if (!createdAt) {
+        continue;
+      }
+
+      const message = (commit.commit?.message || "").split(/\r?\n/)[0] || `Commit ${commit.sha.slice(0, 7)}`;
+      const author = commit.author?.login || commit.commit?.author?.name || "unknown";
+
+      rows.push({
+        subcategory: titleCase(subpage),
+        number: commit.sha.slice(0, 7),
+        title: message,
+        repo,
+        author,
+        createdAt,
+        labels: ["commit"],
+        url: commit.html_url
+      });
+    }
+  }
+
+  return rows;
+}
+
 async function getCommitDetails(repo, sha, token) {
   const url = `${GITHUB_API}/repos/${repo}/commits/${sha}`;
   return fetchJson(url, token);
@@ -481,37 +513,25 @@ async function main() {
   );
   const azureDocsCommitsPath = getEnv("AZURE_DOCS_COMMITS_PATH", "articles/active-directory");
   const useCommitFeedForAzureDocs = getEnv("USE_COMMITS_FOR_AZURE_DOCS", "true").toLowerCase() === "true";
+  const azureDocsSubpages = splitCsv(
+    getEnv(
+      "AZURE_DOCS_SUBPAGES",
+      "app-provisioning,app-proxy,authentication,azuread-dev,cloud-infrastructure-entitlement-management,cloud-sync,conditional-access,develop,devices,enterprise-users,external-identities,fundamentals,governance,hybrid,identity-protection,manage-apps,managed-identities-azure-resources,roles,saas-apps,verify"
+    )
+  );
 
   const allRows = [];
 
   for (const repo of repos) {
     if (repo.toLowerCase() === "microsoftdocs/azure-docs" && useCommitFeedForAzureDocs) {
-      const commits = await listCommitsByPath(repo, azureDocsCommitsPath, githubToken, sinceIso);
-      for (const commit of commits) {
-        const sha = commit.sha;
-        const details = await getCommitDetails(repo, sha, githubToken);
-        const subpages = extractSubpagesFromFiles(details.files || [], azureDocsCommitsPath);
-        if (subpages.length === 0) {
-          continue;
-        }
-
-        const createdAt = details.commit?.author?.date || details.commit?.committer?.date || generatedAtIso;
-        const message = (details.commit?.message || "").split(/\r?\n/)[0] || `Commit ${sha.slice(0, 7)}`;
-        const author = details.author?.login || details.commit?.author?.name || "unknown";
-
-        for (const subpage of subpages) {
-          allRows.push({
-            subcategory: subpage,
-            number: sha.slice(0, 7),
-            title: message,
-            repo,
-            author,
-            createdAt,
-            labels: ["commit"],
-            url: details.html_url || commit.html_url
-          });
-        }
-      }
+      const commitRows = await listCommitsForSubpages(
+        repo,
+        azureDocsCommitsPath,
+        azureDocsSubpages,
+        githubToken,
+        sinceIso
+      );
+      allRows.push(...commitRows);
       continue;
     }
 
