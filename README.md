@@ -18,8 +18,15 @@ The workflow runs at 07:00 Europe/Amsterdam, collects updates from Entra docs so
 - Data sources:
   - `MicrosoftDocs/entra-docs` via PR feed
   - `MicrosoftDocs/azure-docs` via commit feed for `articles/active-directory/<subpage>`
-- Grouped sections by subpage/category
-- Markdown tables in the issue body (email-readable)
+- **23 smart categories** (Conditional Access, Authentication, App Provisioning, App Proxy, Hybrid Identity, Devices, Governance, CIEM, and 15 more)
+- Each row includes:
+  - Timestamp (Europe/Amsterdam timezone)
+  - Author
+  - PR/Commit number and title
+  - Commit URL
+  - **MS Learn URL** (when document is published to Learn)
+  - PR URL
+- Email-friendly Markdown tables with padding for readability
 - Uploaded artifacts: `html`, `md`, `json`
 
 ## Repo Structure

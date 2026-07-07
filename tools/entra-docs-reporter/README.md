@@ -17,10 +17,17 @@ It posts a grouped Markdown report to a GitHub issue so GitHub notifications can
 	- `MicrosoftDocs/entra-docs` PR feed
 	- `MicrosoftDocs/azure-docs` commit feed per configured subpages under `articles/active-directory`
 3. Script filters to the last 24 hours only.
-4. Results are grouped into subcategories/subpages.
-5. Workflow creates or updates a daily issue with the report body.
-6. GitHub sends notifications to subscribed users/watchers.
-7. HTML, Markdown, and metadata outputs are uploaded as artifacts.
+4. Results are grouped into 23 smart categories:
+	- **Security**: Conditional Access, Authentication, Identity Protection
+	- **Administration**: Roles, Enterprise Users, Governance
+	- **Infrastructure**: Hybrid Identity, Cloud Sync, Devices
+	- **Integration**: App Provisioning, App Proxy, Manage Apps, SaaS Apps
+	- **Development**: Develop, Azure AD Dev
+	- **Advanced**: Permissions Management, CIEM, Workload Identities, External Identities, Verified ID, Fundamentals
+5. For each change, MS Learn URL is generated when the document is published to Learn.
+6. Workflow creates or updates a daily issue with the report body.
+7. GitHub sends notifications to subscribed users/watchers.
+8. HTML, Markdown, and metadata outputs are uploaded as artifacts.
 
 ## Sources scanned (default)
 
@@ -54,10 +61,24 @@ If you want a mailbox rule for info@janbakker.tech, filter on issue title prefix
 
 - `LOOKBACK_HOURS`: default `24`
 - `AZURE_DOCS_COMMITS_PATH`: default `articles/active-directory`
-- `AZURE_DOCS_SUBPAGES`: comma-separated subpages to track
+- `AZURE_DOCS_SUBPAGES`: comma-separated subpages to track (20 by default)
 - `USE_COMMITS_FOR_AZURE_DOCS`: `true` to use commit-based Azure Docs tracking
 
-Subcategory grouping logic can be adjusted in `report.mjs`.
+### Subcategory Detection
+
+The reporter uses smart pattern matching to categorize changes:
+
+- **Title/PR body/labels** are scanned for keywords (e.g., "conditional access", "authentication", "provisioning")
+- **File paths** are analyzed to map to subpages (e.g., `articles/active-directory/app-provisioning/...` → "App Provisioning")
+- **Fallback**: If no patterns match, the subcategory is derived from the Azure Docs subpage or entra-docs folder structure
+
+23 categories are recognized; edit the `rules` array in `report.mjs` to add more or adjust patterns.
+
+### MS Learn URL Generation
+
+- Only publishable `.md` files generate Learn URLs
+- Excludes: `includes/`, `media/`, `toc.md`, `index.yml`, and other metadata files
+- Invalid paths show as `-` instead of broken links
 
 The report output is intentionally Markdown-first for readability in email notifications.
 
