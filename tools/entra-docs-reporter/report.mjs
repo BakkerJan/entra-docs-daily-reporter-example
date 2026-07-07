@@ -39,6 +39,32 @@ function normalizeDocPath(filePath) {
   return path;
 }
 
+function isLikelyLearnPagePath(repo, filePath) {
+  const p = filePath.replace(/\\/g, "/").toLowerCase();
+  if (!p.endsWith(".md")) {
+    return false;
+  }
+  if (p.endsWith("/toc.md") || p.endsWith("/toc.yml") || p.endsWith("/index.yml")) {
+    return false;
+  }
+
+  if (repo.toLowerCase() === "microsoftdocs/azure-docs") {
+    if (!p.startsWith("articles/")) return false;
+    if (p.includes("/includes/")) return false;
+    if (p.includes("/media/")) return false;
+    return true;
+  }
+
+  if (repo.toLowerCase() === "microsoftdocs/entra-docs") {
+    if (!p.startsWith("docs/")) return false;
+    if (p.includes("/includes/")) return false;
+    if (p.includes("/media/")) return false;
+    return true;
+  }
+
+  return true;
+}
+
 function toMsLearnUrl(repo, filePath) {
   const normalized = normalizeDocPath(filePath);
   if (repo.toLowerCase() === "microsoftdocs/azure-docs" && normalized.toLowerCase().startsWith("articles/")) {
@@ -51,7 +77,7 @@ function toMsLearnUrl(repo, filePath) {
 }
 
 function pickPrimaryDocFile(repo, filePaths) {
-  const files = filePaths.filter((f) => /\.md$/i.test(f));
+  const files = filePaths.filter((f) => isLikelyLearnPagePath(repo, f));
   if (files.length === 0) {
     return "";
   }
