@@ -313,7 +313,8 @@ async function listCommitsForSubpages(repo, basePath, subpages, token, sinceIso)
 
       rows.push({
         subcategory: titleCase(subpage),
-        number: commit.sha.slice(0, 7),
+        sha: commit.sha,
+        shortSha: commit.sha.slice(0, 7),
         title: message,
         repo,
         author,
@@ -493,7 +494,7 @@ function buildHtml({ generatedAtIso, sinceIso, grouped, total }) {
           const commitLink = row.commitUrl ? `<a href="${esc(row.commitUrl)}">commit</a>` : "-";
           return `
             <tr>
-              <td><a href="${esc(row.url)}">#${row.number}</a></td>
+              <td><a href="${esc(row.url)}">${esc(row.shortSha)}</a></td>
               <td>${esc(row.title)}</td>
               <td>${esc(row.repo)}</td>
               <td>${esc(row.author)}</td>
@@ -643,7 +644,7 @@ function buildMarkdownWindow({ title, grouped, total, sinceIso, generatedAtIso }
       const tableRows = rows
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .map((row) => {
-          const itemLabel = row.source === "Commit" ? row.number : `#${row.number}`;
+          const itemLabel = row.shortSha;
           const updateText = `${itemLabel} ${row.title}`;
           const created = `  ${escMd(toAmsterdamTime(row.createdAt))}  `;
           const author = `  ${escMd(row.author)}  `;
@@ -716,73 +717,28 @@ async function main() {
   const primarySinceIso = primarySince.toISOString();
   const extendedSinceIso = extendedSince.toISOString();
 
-  const repos = splitCsv(getEnv("ENTRA_DOC_REPOS", "MicrosoftDocs/entra-docs,MicrosoftDocs/azure-docs"));
-  const keywords = splitCsv(
+  // Defaults mirror the ENTRA_DOCS_SUBPAGES value in the workflow YAML; update both if adding new folders.
+  const entraDocsSubpages = splitCsv(
     getEnv(
-      "ENTRA_KEYWORDS",
-      "entra,active-directory,identity,authentication,conditional-access,external-identities,identity-governance,permissions-management,workload-identities"
+      "ENTRA_DOCS_SUBPAGES",
+      "agent-id,architecture,backup,breadcrumb,external-id,fundamentals,global-secure-access,id-governance,id-protection,identity-platform,identity,includes,media,permissions-management,security-copilot,standards,verified-id,workload-id"
     )
   );
-  const azureDocsPathPrefixes = splitCsv(
-    getEnv("AZURE_DOCS_PATH_PREFIXES", "articles/active-directory")
-  );
-  const azureDocsCommitsPath = getEnv("AZURE_DOCS_COMMITS_PATH", "articles/active-directory");
-  const useCommitFeedForAzureDocs = getEnv("USE_COMMITS_FOR_AZURE_DOCS", "true").toLowerCase() === "true";
-  const azureDocsSubpages = splitCsv(
-    getEnv(
-      "AZURE_DOCS_SUBPAGES",
-      "app-provisioning,app-proxy,authentication,azuread-dev,cloud-infrastructure-entitlement-management,cloud-sync,conditional-access,develop,devices,enterprise-users,external-identities,fundamentals,governance,hybrid,identity-protection,manage-apps,managed-identities-azure-resources,roles,saas-apps,verify"
-    )
-  );
+  const entraDocsCommitsPath = getEnv("ENTRA_DOCS_COMMITS_PATH", "docs");
 
   const allRows = [];
 
-  for (const repo of repos) {
-    if (repo.toLowerCase() === "microsoftdocs/azure-docs" && useCommitFeedForAzureDocs) {
-      const commitRows = await listCommitsForSubpages(
-        repo,
-        azureDocsCommitsPath,
-        azureDocsSubpages,
-        githubToken,
-        extendedSinceIso
-      );
-      allRows.push(...commitRows);
-      continue;
-    }
-
-    const prs = await listPullRequests(repo, githubToken, extendedSinceIso);
-    for (const pr of prs) {
-      const files = await listPullFiles(repo, pr.number, githubToken);
-      if (!isEntraRelated(repo, pr, files, keywords, azureDocsPathPrefixes)) {
-        continue;
-      }
-
-      allRows.push({
-        subcategory: detectSubcategory(repo, pr, files),
-        number: pr.number,
-        title: pr.title,
-        repo,
-        author: pr.user?.login || "unknown",
-        createdAt: pr.created_at,
-        labels: (pr.labels || []).map((l) => l.name),
-        source: "PR",
-        commitUrl: pr.head?.sha ? `https://github.com/${repo}/commit/${pr.head.sha}` : "",
-        msLearnUrl: (() => {
-          const primaryDocFile = pickPrimaryDocFile(repo, files);
-          return primaryDocFile && isLikelyLearnPagePath(repo, primaryDocFile) ? toMsLearnUrl(repo, primaryDocFile) : "";
-        })(),
-        sourceUrl: (() => {
-          const primaryDocFile = pickPrimaryDocFile(repo, files);
-          return primaryDocFile ? toGithubSourceUrl(repo, primaryDocFile) : "";
-        })(),
-        prUrl: pr.html_url,
-        url: pr.html_url
-      });
-    }
-  }
+  const commitRows = await listCommitsForSubpages(
+    "MicrosoftDocs/entra-docs",
+    entraDocsCommitsPath,
+    entraDocsSubpages,
+    githubToken,
+    extendedSinceIso
+  );
+  allRows.push(...commitRows);
 
   const uniqueRows = Array.from(
-    new Map(allRows.map((row) => [`${row.repo}#${row.number}#${row.subcategory}`, row])).values()
+    new Map(allRows.map((row) => [`${row.repo}#${row.sha}#${row.subcategory}`, row])).values()
   );
 
   const primaryRows = rowsSince(uniqueRows, primarySinceIso);
