@@ -76,8 +76,6 @@ function isLikelyLearnPagePath(repo, filePath) {
     if (!p.startsWith("docs/")) return false;
     const topFolder = p.slice("docs/".length).split("/")[0];
     if (ENTRA_DOCS_NON_PUBLISH_FOLDERS.has(topFolder)) return false;
-    if (p.includes("/includes/")) return false;
-    if (p.includes("/media/")) return false;
     return true;
   }
 
