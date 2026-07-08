@@ -15,9 +15,8 @@ The workflow runs at 07:00 Europe/Amsterdam, collects updates from Entra docs so
 ## What You Get
 
 - Strict 24-hour report window (no multi-day section in the issue body)
-- Data sources:
-  - `MicrosoftDocs/entra-docs` via PR feed
-  - `MicrosoftDocs/azure-docs` via commit feed for `articles/active-directory/<subpage>`
+- Data source:
+  - `MicrosoftDocs/entra-docs` via commit feed under `docs/<subpage>`
 - **23 smart categories** (Conditional Access, Authentication, App Provisioning, App Proxy, Hybrid Identity, Devices, Governance, CIEM, and 15 more)
 - Each row includes:
   - Timestamp (Europe/Amsterdam timezone)
@@ -53,9 +52,8 @@ gh run list --workflow "entra-docs-daily-reporter.yml" --repo <owner>/<repo> --l
 ## Customize
 
 - Main window: `LOOKBACK_HOURS` (default `24`)
-- Azure Docs base path: `AZURE_DOCS_COMMITS_PATH` (default `articles/active-directory`)
-- Azure Docs tracked subpages: `AZURE_DOCS_SUBPAGES`
-- Enable/disable commit feed mode: `USE_COMMITS_FOR_AZURE_DOCS`
+- Entra Docs base path: `ENTRA_DOCS_COMMITS_PATH` (default `docs`)
+- Entra Docs tracked subpages: `ENTRA_DOCS_SUBPAGES`
 
 ## Notes
 
