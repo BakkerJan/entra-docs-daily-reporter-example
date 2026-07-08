@@ -16,12 +16,8 @@ jobs:
     env:
       TZ: Europe/Amsterdam
       LOOKBACK_HOURS: "24"
-      ENTRA_DOC_REPOS: "MicrosoftDocs/entra-docs,MicrosoftDocs/azure-docs"
-      ENTRA_KEYWORDS: "entra,active-directory,identity,authentication,conditional-access,external-identities,identity-governance,permissions-management,workload-identities"
-      AZURE_DOCS_PATH_PREFIXES: "articles/active-directory"
-      USE_COMMITS_FOR_AZURE_DOCS: "true"
-      AZURE_DOCS_COMMITS_PATH: "articles/active-directory"
-      AZURE_DOCS_SUBPAGES: "app-provisioning,app-proxy,authentication,azuread-dev,cloud-infrastructure-entitlement-management,cloud-sync,conditional-access,develop,devices,enterprise-users,external-identities,fundamentals,governance,hybrid,identity-protection,manage-apps,managed-identities-azure-resources,roles,saas-apps,verify"
+      ENTRA_DOCS_COMMITS_PATH: "docs"
+      ENTRA_DOCS_SUBPAGES: "agent-id,architecture,backup,breadcrumb,external-id,fundamentals,global-secure-access,id-governance,id-protection,identity-platform,identity,includes,media,permissions-management,security-copilot,standards,verified-id,workload-id"
       REPORT_OUTPUT: "report-output/entra-daily-report.html"
       ISSUE_OUTPUT: "report-output/entra-daily-report.md"
       REPORT_METADATA_OUTPUT: "report-output/entra-daily-report.json"
