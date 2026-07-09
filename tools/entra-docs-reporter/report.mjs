@@ -317,6 +317,11 @@ async function rowsFromPublishBatches(repo, token, sinceIso) {
       let subcategory = "General";
       if (segments[0] === "docs" && segments[1]) {
         subcategory = titleCase(segments[1]);
+        // If the file lives in a subfolder (docs/<section>/<subfolder>/<file>.md),
+        // include the subfolder in the subcategory so items are grouped more granularly.
+        if (segments[2] && segments.length >= 4) {
+          subcategory = `${titleCase(segments[1])} > ${titleCase(segments[2])}`;
+        }
       }
 
       // Use the file name as the human-readable title, converting kebab/snake to
