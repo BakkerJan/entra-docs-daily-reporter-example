@@ -103,7 +103,7 @@ jobs:
                   body: notificationComment
                 });
               } catch (error) {
-                core.warning(`Updated issue #${issueNumber}, but failed to post the refresh comment.`);
+                core.error(`Failed to post refresh comment on issue #${issueNumber}.`);
                 throw error;
               }
               core.info(`Updated issue #${issueNumber}`);
