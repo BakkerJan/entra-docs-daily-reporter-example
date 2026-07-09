@@ -13,28 +13,29 @@ It posts a grouped Markdown report to a GitHub issue so GitHub notifications can
 ## How it works
 
 1. Workflow triggers hourly and only runs at 07:00 local Europe/Amsterdam time.
-2. Script reads updates from:
-	- `MicrosoftDocs/entra-docs` PR feed
-	- `MicrosoftDocs/azure-docs` commit feed per configured subpages under `articles/active-directory`
-3. Script filters to the last 24 hours only.
-4. Results are grouped into 23 smart categories:
-	- **Security**: Conditional Access, Authentication, Identity Protection
-	- **Administration**: Roles, Enterprise Users, Governance
-	- **Infrastructure**: Hybrid Identity, Cloud Sync, Devices
-	- **Integration**: App Provisioning, App Proxy, Manage Apps, SaaS Apps
-	- **Development**: Develop, Azure AD Dev
-	- **Advanced**: Permissions Management, CIEM, Workload Identities, External Identities, Verified ID, Fundamentals
-5. For each change, MS Learn URL is generated when the document is published to Learn.
+2. Script scans **Auto Publish batch commits** on `MicrosoftDocs/entra-docs`.
+   These are the `"Auto Publish – main to live"` and `"Merging changes synced"` merge commits created by `learn-build-service-prod[bot]` roughly every 5 hours. They batch all content that was merged to `main` since the previous publish and represent the moment docs become live on learn.microsoft.com.
+3. Script filters batch commits to the last 24 hours and expands each commit into one row per publishable `.md` file it contains.
+4. Results are grouped by the top-level folder under `docs/` (e.g. `identity`, `external-id`, `global-secure-access`).
+5. For each file, an MS Learn URL and a GitHub source link are generated.
 6. Workflow creates or updates a daily issue with the report body.
 7. GitHub sends notifications to subscribed users/watchers.
 8. HTML, Markdown, and metadata outputs are uploaded as artifacts.
 
+## Why Auto Publish commits instead of author commits?
+
+The `MicrosoftDocs/entra-docs` repository has two kinds of commits on `main`:
+
+| Commit type | Creator | Meaning |
+|---|---|---|
+| Author commit | Human author / Copilot | Content was written and merged to the working branch |
+| Auto Publish merge | `learn-build-service-prod[bot]` | Content **became live** on learn.microsoft.com |
+
+GitHub's path-filtered commits API silently excludes merge commits. The old approach (querying per subpage path) therefore missed any day where only Auto Publish batches ran — producing empty reports even when real content shipped. Tracking Auto Publish batches directly solves this: the report always reflects what readers can actually see on learn.microsoft.com today.
+
 ## Sources scanned (default)
 
-- `MicrosoftDocs/entra-docs`
-- `MicrosoftDocs/azure-docs` commits for `articles/active-directory/<subpage>`
-
-Override with workflow env values such as `ENTRA_DOC_REPOS`, `AZURE_DOCS_COMMITS_PATH`, and `AZURE_DOCS_SUBPAGES`.
+- `MicrosoftDocs/entra-docs` — Auto Publish batch commits within the last 24 hours
 
 ## Required GitHub setup
 
@@ -60,27 +61,6 @@ If you want a mailbox rule for info@janbakker.tech, filter on issue title prefix
 ## Customize tracking
 
 - `LOOKBACK_HOURS`: default `24`
-- `AZURE_DOCS_COMMITS_PATH`: default `articles/active-directory`
-- `AZURE_DOCS_SUBPAGES`: comma-separated subpages to track (20 by default)
-- `USE_COMMITS_FOR_AZURE_DOCS`: `true` to use commit-based Azure Docs tracking
-
-### Subcategory Detection
-
-The reporter uses smart pattern matching to categorize changes:
-
-- **Title/PR body/labels** are scanned for keywords (e.g., "conditional access", "authentication", "provisioning")
-- **File paths** are analyzed to map to subpages (e.g., `articles/active-directory/app-provisioning/...` → "App Provisioning")
-- **Fallback**: If no patterns match, the subcategory is derived from the Azure Docs subpage or entra-docs folder structure
-
-23 categories are recognized; edit the `rules` array in `report.mjs` to add more or adjust patterns.
-
-### MS Learn URL Generation
-
-- Only publishable `.md` files generate Learn URLs
-- Excludes: `includes/`, `media/`, `toc.md`, `index.yml`, and other metadata files
-- Invalid paths show as `-` instead of broken links
-
-The report output is intentionally Markdown-first for readability in email notifications.
 
 ## Local test
 

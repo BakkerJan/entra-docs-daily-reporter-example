@@ -8,13 +8,6 @@ function getEnv(name, fallback = "") {
   return value && value.trim().length > 0 ? value.trim() : fallback;
 }
 
-function splitCsv(input) {
-  return input
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
-
 function esc(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -122,33 +115,6 @@ function toGithubSourceUrl(repo, filePath) {
   return `https://github.com/${repo}/blob/main/${normalizedPath}`;
 }
 
-function pickPrimaryDocFile(repo, filePaths) {
-  const publishableFiles = filePaths.filter((f) => isLikelyLearnPagePath(repo, f));
-  if (publishableFiles.length > 0) {
-    if (repo.toLowerCase() === "microsoftdocs/azure-docs") {
-      const preferred = publishableFiles.find((f) => f.toLowerCase().startsWith("articles/active-directory/"));
-      if (preferred) return preferred;
-      return publishableFiles[0];
-    }
-    if (repo.toLowerCase() === "microsoftdocs/entra-docs") {
-      return publishableFiles[0];
-    }
-  }
-
-  const mdFiles = filePaths.filter((f) => f.toLowerCase().endsWith(".md"));
-  const likelyPublishable = mdFiles.filter((f) => {
-    const lowerF = f.toLowerCase();
-    if (lowerF.endsWith("/toc.md") || lowerF.endsWith("/toc.yml") || lowerF.endsWith("/index.yml")) {
-      return false;
-    }
-    if (!lowerF.includes("articles/") && !lowerF.includes("docs/")) {
-      return false;
-    }
-    return true;
-  });
-  
-  return likelyPublishable.length > 0 ? likelyPublishable[0] : "";
-}
 
 function titleCase(value) {
   return value
@@ -246,13 +212,17 @@ async function listPullFiles(repo, number, token) {
   return files;
 }
 
-async function listCommitsByPath(repo, docsPath, token, sinceIso) {
+// Fetches all repo-level commits (no path filter) and returns those that are
+// "Auto Publish – main to live" or "Merging changes synced" batch commits
+// that landed within the time window.  These are the only commits that reflect
+// content becoming live on learn.microsoft.com.
+async function listPublishBatches(repo, token, sinceIso) {
   const items = [];
   let page = 1;
   const perPage = 100;
 
   while (true) {
-    const url = `${GITHUB_API}/repos/${repo}/commits?path=${encodeURIComponent(docsPath)}&per_page=${perPage}&page=${page}`;
+    const url = `${GITHUB_API}/repos/${repo}/commits?per_page=${perPage}&page=${page}`;
     const commits = await fetchJson(url, token);
 
     if (!Array.isArray(commits) || commits.length === 0) {
@@ -262,7 +232,7 @@ async function listCommitsByPath(repo, docsPath, token, sinceIso) {
     let reachedOlder = false;
 
     for (const c of commits) {
-      const createdAt = c.commit?.author?.date || c.commit?.committer?.date;
+      const createdAt = c.commit?.committer?.date || c.commit?.author?.date;
       if (!createdAt) {
         continue;
       }
@@ -270,7 +240,15 @@ async function listCommitsByPath(repo, docsPath, token, sinceIso) {
         reachedOlder = true;
         break;
       }
-      items.push(c);
+
+      const msg = (c.commit?.message || "").toLowerCase();
+      const isPublishBatch =
+        (msg.startsWith("merge pull request") && msg.includes("auto publish")) ||
+        msg.startsWith("merging changes synced from");
+
+      if (isPublishBatch) {
+        items.push(c);
+      }
     }
 
     if (reachedOlder || commits.length < perPage) {
@@ -283,76 +261,71 @@ async function listCommitsByPath(repo, docsPath, token, sinceIso) {
   return items;
 }
 
-async function listCommitsForSubpages(repo, basePath, subpages, token, sinceIso) {
+// Expands each publish-batch commit into one row per publishable doc file.
+// Each row carries its own subcategory derived from the file path so the
+// report stays grouped the same way as before.
+async function rowsFromPublishBatches(repo, token, sinceIso) {
+  const batches = await listPublishBatches(repo, token, sinceIso);
   const rows = [];
-  const commitToPrCache = new Map();
-  const commitDetailsCache = new Map();
+  const seen = new Set();
 
-  for (const subpage of subpages) {
-    const pathForCall = `${basePath.replace(/\/+$/, "")}/${subpage.replace(/^\/+/, "")}`;
-    const commits = await listCommitsByPath(repo, pathForCall, token, sinceIso);
+  for (const batch of batches) {
+    const createdAt = batch.commit?.committer?.date || batch.commit?.author?.date;
+    if (!createdAt) {
+      continue;
+    }
 
-    for (const commit of commits) {
-      const createdAt = commit.commit?.author?.date || commit.commit?.committer?.date;
-      if (!createdAt) {
+    const details = await getCommitDetails(repo, batch.sha, token);
+    const allFiles = (details.files || []).map((f) => f.filename).filter(Boolean);
+    const publishableFiles = allFiles.filter((f) => isLikelyLearnPagePath(repo, f));
+
+    for (const filePath of publishableFiles) {
+      // Deduplicate: a file can appear in both a prmerger and a learn-build sync
+      const dedupKey = `${repo}#${filePath}`;
+      if (seen.has(dedupKey)) {
         continue;
       }
+      seen.add(dedupKey);
 
-      const message = (commit.commit?.message || "").split(/\r?\n/)[0] || `Commit ${commit.sha.slice(0, 7)}`;
-      const author = commit.author?.login || commit.commit?.author?.name || "unknown";
-      const prUrl = await getAssociatedPullRequestUrl(repo, commit.sha, token, commitToPrCache);
-      let details = commitDetailsCache.get(commit.sha);
-      if (!details) {
-        details = await getCommitDetails(repo, commit.sha, token);
-        commitDetailsCache.set(commit.sha, details);
+      const msLearnUrl = toMsLearnUrl(repo, filePath);
+      const sourceUrl = toGithubSourceUrl(repo, filePath);
+
+      // Derive subcategory from the file path. All publishable entra-docs files
+      // live under docs/<section>/..., so segments[1] is the section name.
+      // Files that don't match this pattern (e.g. from other repos if the
+      // function is reused) fall back to "General".
+      const segments = filePath.replace(/\\/g, "/").toLowerCase().split("/").filter(Boolean);
+      let subcategory = "General";
+      if (segments[0] === "docs" && segments[1]) {
+        subcategory = titleCase(segments[1]);
       }
-      const filePaths = (details.files || []).map((f) => f.filename).filter(Boolean);
-      const primaryDocFile = pickPrimaryDocFile(repo, filePaths);
-      const msLearnUrl = primaryDocFile && isLikelyLearnPagePath(repo, primaryDocFile) ? toMsLearnUrl(repo, primaryDocFile) : "";
-      const sourceUrl = primaryDocFile ? toGithubSourceUrl(repo, primaryDocFile) : "";
+
+      // Use the file name as the human-readable title, converting kebab/snake to
+      // title case so e.g. "how-to-transfer-authenticator-new-phone" becomes
+      // "How To Transfer Authenticator New Phone".
+      const fileName = filePath.split("/").pop() || filePath;
+      const title = titleCase(fileName.replace(/\.md$/i, ""));
 
       rows.push({
-        subcategory: titleCase(subpage),
-        sha: commit.sha,
-        shortSha: commit.sha.slice(0, 7),
-        title: message,
+        subcategory,
+        sha: batch.sha,
+        shortSha: batch.sha.slice(0, 7),
+        title,
         repo,
-        author,
+        author: batch.commit?.committer?.name || batch.author?.login || "learn-build-service",
         createdAt,
-        labels: ["commit"],
-        source: "Commit",
-        commitUrl: commit.html_url,
+        labels: ["published"],
+        source: "AutoPublish",
+        commitUrl: batch.html_url,
         msLearnUrl,
         sourceUrl,
-        prUrl,
-        url: commit.html_url
+        prUrl: "",
+        url: batch.html_url
       });
     }
   }
 
   return rows;
-}
-
-async function getAssociatedPullRequestUrl(repo, sha, token, cache) {
-  if (cache.has(sha)) {
-    return cache.get(sha);
-  }
-
-  try {
-    const url = `${GITHUB_API}/repos/${repo}/commits/${sha}/pulls?per_page=1`;
-    const prs = await fetchJson(url, token);
-    const prUrl = Array.isArray(prs) && prs.length > 0 ? prs[0].html_url : "";
-    cache.set(sha, prUrl || "");
-    return prUrl || "";
-  } catch {
-    cache.set(sha, "");
-    return "";
-  }
-}
-
-function rowsSince(rows, sinceIso) {
-  const since = new Date(sinceIso);
-  return rows.filter((r) => new Date(r.createdAt) >= since);
 }
 
 function groupRows(rows) {
@@ -366,119 +339,6 @@ function groupRows(rows) {
 async function getCommitDetails(repo, sha, token) {
   const url = `${GITHUB_API}/repos/${repo}/commits/${sha}`;
   return fetchJson(url, token);
-}
-
-function extractSubpagesFromFiles(files, docsPath) {
-  const normalized = docsPath.replace(/^\/+|\/+$/g, "");
-  const prefixes = [
-    `${normalized}/`,
-    `${normalized.replace(/^articles\//, "")}/`
-  ];
-
-  const subpages = new Set();
-  for (const f of files) {
-    const filename = (f.filename || "").toLowerCase();
-    for (const prefix of prefixes) {
-      const p = prefix.toLowerCase();
-      if (!filename.startsWith(p)) {
-        continue;
-      }
-
-      const rest = filename.slice(p.length);
-      const segment = rest.split("/").filter(Boolean)[0];
-      if (segment) {
-        subpages.add(titleCase(segment));
-      } else {
-        subpages.add("General");
-      }
-      break;
-    }
-  }
-
-  return Array.from(subpages);
-}
-
-function detectSubcategory(repo, pr, filePaths) {
-  const labels = (pr.labels || []).map((l) => l.name.toLowerCase());
-  const haystack = `${pr.title} ${(pr.body || "")}`.toLowerCase();
-  const files = filePaths.map((f) => f.toLowerCase());
-
-  const rules = [
-    { name: "Conditional Access", patterns: [/conditional[- ]?access/, /\/conditional-access\//i] },
-    { name: "Authentication", patterns: [/\bauthentication\b/, /\/authentication\//i] },
-    { name: "App Provisioning", patterns: [/app[- ]?provisioning|provisioning|scim/, /\/app-provisioning\//i] },
-    { name: "App Proxy", patterns: [/app[- ]?proxy|application[- ]?proxy|kerberos/, /\/app-proxy\//i] },
-    { name: "Identity Governance", patterns: [/identity[- ]?governance|access[- ]?review/, /\/identity-governance\//i] },
-    { name: "External Identities", patterns: [/external[- ]?identit|b2b|b2c|guest/, /\/external-identities\//i] },
-    { name: "Identity Protection", patterns: [/identity[- ]?protection|risk[- ]?detection|risky user/, /\/identity-protection\//i] },
-    { name: "Permissions Management", patterns: [/permissions[- ]?management|entitlement[- ]?management|pam|privileged/, /\/permissions-management\//i] },
-    { name: "Workload Identities", patterns: [/workload[- ]?identit|managed identity|service principal|spn/, /\/workload-identities\//i] },
-    { name: "Verified ID", patterns: [/verified id|verifiable credentials/, /\/verified-id\//i] },
-    { name: "Hybrid Identity", patterns: [/hybrid|azure ad connect|connect|sync|pass-through|federation/, /\/hybrid\//i] },
-    { name: "Cloud Sync", patterns: [/cloud sync|cloud synchronization|lightweight sync/, /\/cloud-sync\//i] },
-    { name: "Devices", patterns: [/\bdevice\b|device management|intune|enrollment|compliance|windows hello/, /\/devices\//i] },
-    { name: "Manage Apps", patterns: [/app management|application management|sso|single sign-on|app assignment/, /\/manage-apps\//i] },
-    { name: "SaaS Apps", patterns: [/saas|salesforce|slack|github|dropbox|okta|workday|box|zoom/, /\/saas-apps\//i] },
-    { name: "Roles", patterns: [/\brole\b|rbac|admin role|custom role|directory role/, /\/roles\//i] },
-    { name: "Enterprise Users", patterns: [/enterprise user|bulk operation|bulk user|bulk create/, /\/enterprise-users\//i] },
-    { name: "Governance", patterns: [/governance|lifecycle|access package|attestation|review/, /\/governance\//i] },
-    { name: "Fundamentals", patterns: [/fundamental|basic|getting started|what is|overview/, /\/fundamentals\//i] },
-    { name: "Develop", patterns: [/\bapi\b|sdk|developer|custom app|integration|protocol|oauth|saml|openid|graphql/, /\/develop\//i] },
-    { name: "Azure AD Dev", patterns: [/azure ad|microsoft graph|v1\.0|v2\.0|endpoint/, /\/azuread-dev\//i] },
-    { name: "CIEM", patterns: [/cloud infrastructure entitlement|ciem|entitlement management|rights management/, /\/cloud-infrastructure-entitlement-management\//i] },
-    { name: "Verify", patterns: [/\bverify\b|verification/, /\/verify\//i] }
-  ];
-
-  for (const rule of rules) {
-    const hit = rule.patterns.some((p) => {
-      if (p.test(haystack)) return true;
-      if (labels.some((l) => p.test(l))) return true;
-      return files.some((f) => p.test(f));
-    });
-
-    if (hit) return rule.name;
-  }
-
-  for (const fullPath of files) {
-    const segments = fullPath.split("/").filter(Boolean);
-    if (repo.toLowerCase() === "microsoftdocs/entra-docs") {
-      if (segments[0] === "docs" && segments[1]) return titleCase(segments[1]);
-      if (segments[0]) return titleCase(segments[0]);
-    }
-    if (repo.toLowerCase() === "microsoftdocs/azure-docs") {
-      const idx = segments.indexOf("articles");
-      if (idx >= 0 && segments[idx + 1]) {
-        // For active-directory paths, dig deeper to find the subpage
-        if (segments[idx + 1].toLowerCase() === "active-directory" && segments[idx + 2]) {
-          return titleCase(segments[idx + 2]);
-        }
-        return titleCase(segments[idx + 1]);
-      }
-    }
-  }
-
-  return "General";
-}
-
-function isEntraRelated(repo, pr, filePaths, keywords, azureDocsPathPrefixes) {
-  if (repo.toLowerCase() === "microsoftdocs/entra-docs") {
-    return true;
-  }
-
-  if (repo.toLowerCase() === "microsoftdocs/azure-docs") {
-    const lowerFiles = filePaths.map((f) => f.toLowerCase());
-    const pathMatch = lowerFiles.some((filePath) =>
-      azureDocsPathPrefixes.some((prefix) => filePath.startsWith(prefix.toLowerCase()))
-    );
-    if (pathMatch) {
-      return true;
-    }
-  }
-
-  const labels = (pr.labels || []).map((l) => l.name.toLowerCase());
-  const combined = `${pr.title} ${(pr.body || "")} ${labels.join(" ")} ${filePaths.join(" ")}`.toLowerCase();
-
-  return keywords.some((keyword) => combined.includes(keyword.toLowerCase()));
 }
 
 function buildHtml({ generatedAtIso, sinceIso, grouped, total }) {
@@ -711,39 +571,17 @@ async function main() {
   const generatedAtIso = generatedAt.toISOString();
 
   const lookbackHours = Number.parseInt(getEnv("LOOKBACK_HOURS", "24"), 10);
-  const extendedLookbackHours = lookbackHours;
   const primarySince = new Date(generatedAt.getTime() - lookbackHours * 60 * 60 * 1000);
-  const extendedSince = new Date(generatedAt.getTime() - extendedLookbackHours * 60 * 60 * 1000);
   const primarySinceIso = primarySince.toISOString();
-  const extendedSinceIso = extendedSince.toISOString();
 
-  // Defaults mirror the ENTRA_DOCS_SUBPAGES value in the workflow YAML; update both if adding new folders.
-  const entraDocsSubpages = splitCsv(
-    getEnv(
-      "ENTRA_DOCS_SUBPAGES",
-      "agent-id,architecture,backup,breadcrumb,external-id,fundamentals,global-secure-access,id-governance,id-protection,identity-platform,identity,includes,media,permissions-management,security-copilot,standards,verified-id,workload-id"
-    )
-  );
-  const entraDocsCommitsPath = getEnv("ENTRA_DOCS_COMMITS_PATH", "docs");
-
-  const allRows = [];
-
-  const commitRows = await listCommitsForSubpages(
+  const publishRows = await rowsFromPublishBatches(
     "MicrosoftDocs/entra-docs",
-    entraDocsCommitsPath,
-    entraDocsSubpages,
     githubToken,
-    extendedSinceIso
-  );
-  allRows.push(...commitRows);
-
-  const uniqueRows = Array.from(
-    new Map(allRows.map((row) => [`${row.repo}#${row.sha}#${row.subcategory}`, row])).values()
+    primarySinceIso
   );
 
-  const primaryRows = rowsSince(uniqueRows, primarySinceIso);
+  const primaryRows = publishRows;
   const groupedPrimary = groupRows(primaryRows);
-  const groupedExtended = groupRows(uniqueRows);
 
   const html = buildHtml({
     generatedAtIso,

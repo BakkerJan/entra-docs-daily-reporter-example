@@ -11,7 +11,7 @@ Delivery model: the workflow posts a daily GitHub issue with Markdown tables. Gi
 - Strict 24-hour reporting window
 - Grouped Markdown tables per Entra subcategory/subpage
 - Artifact upload with the rendered HTML report
-- Commit-based tracking for Azure Docs Entra paths
+- Commit-based tracking for Auto Publish batches on MicrosoftDocs/entra-docs
 - Easy to customize subpages and grouping logic
 
 ## Files

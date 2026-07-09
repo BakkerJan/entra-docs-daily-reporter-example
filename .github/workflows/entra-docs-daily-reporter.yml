@@ -16,8 +16,6 @@ jobs:
     env:
       TZ: Europe/Amsterdam
       LOOKBACK_HOURS: "24"
-      ENTRA_DOCS_COMMITS_PATH: "docs"
-      ENTRA_DOCS_SUBPAGES: "agent-id,architecture,backup,breadcrumb,external-id,fundamentals,global-secure-access,id-governance,id-protection,identity-platform,identity,includes,media,permissions-management,security-copilot,standards,verified-id,workload-id"
       REPORT_OUTPUT: "report-output/entra-daily-report.html"
       ISSUE_OUTPUT: "report-output/entra-daily-report.md"
       REPORT_METADATA_OUTPUT: "report-output/entra-daily-report.json"
