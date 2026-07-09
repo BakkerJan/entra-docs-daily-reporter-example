@@ -95,12 +95,17 @@ jobs:
                 body: issueBody,
                 labels: [label]
               });
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                body: notificationComment
-              });
+              try {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issueNumber,
+                  body: notificationComment
+                });
+              } catch (error) {
+                core.warning(`Updated issue #${issueNumber}, but failed to post the refresh comment.`);
+                throw error;
+              }
               core.info(`Updated issue #${issueNumber}`);
             } else {
               const created = await github.rest.issues.create({
