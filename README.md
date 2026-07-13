@@ -2,7 +2,7 @@
 
 Daily GitHub Actions report for Microsoft Entra documentation updates in a strict 24-hour window.
 
-The workflow runs at 07:00 Europe/Amsterdam, collects updates from Entra docs sources, and posts a formatted GitHub issue so GitHub notifications can email you updates. When the daily issue already exists, the workflow also adds a refresh comment that includes the latest report so the rerun email is not empty.
+The workflow runs at 05:00 and 06:00 UTC each day (covering Amsterdam DST transitions), collects updates from Entra docs sources, and posts a formatted GitHub issue so GitHub notifications can email you updates. When the daily issue already exists, the workflow also adds a refresh comment that includes the latest report so the rerun email is not empty.
 
 ## 1-Minute Quick Start
 
