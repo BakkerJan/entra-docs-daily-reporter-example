@@ -12,7 +12,7 @@ It posts a grouped Markdown report to a GitHub issue so GitHub notifications can
 
 ## How it works
 
-1. Workflow triggers at 05:00 and 06:00 UTC, and only continues at 07:00 local Europe/Amsterdam time.
+1. Workflow triggers at 05:00 and 06:00 UTC. Both triggers run unconditionally — GitHub's scheduled runs are unreliable and can fire late or be skipped, so both triggers always proceed to ensure at least one run completes each day. The second run simply refreshes the existing daily issue with a new comment.
 2. Script scans **Auto Publish batch commits** on `MicrosoftDocs/entra-docs`.
    These are the `"Auto Publish – main to live"` and `"Merging changes synced"` merge commits created by `learn-build-service-prod[bot]` roughly every 5 hours. They batch all content that was merged to `main` since the previous publish and represent the moment docs become live on learn.microsoft.com.
 3. Script filters batch commits to the last 24 hours and expands each commit into one row per publishable `.md` file it contains.

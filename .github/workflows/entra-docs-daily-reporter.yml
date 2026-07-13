@@ -26,37 +26,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run only at 07:00 Europe/Amsterdam
-        id: schedule_gate
-        run: |
-          hour=$(date +%H)
-          if [ "$hour" = "07" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping run at hour $hour"
-          fi
-
       - name: Setup Node.js
-        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v5
         with:
           node-version: "24"
 
       - name: Install dependencies
-        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: npm ci
         working-directory: tools/entra-docs-reporter
 
       - name: Generate report files
-        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: npm run report
         working-directory: tools/entra-docs-reporter
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create or update daily issue
-        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/github-script@v8
         with:
           script: |
@@ -125,7 +110,6 @@ jobs:
             }
 
       - name: Upload HTML artifact
-        if: steps.schedule_gate.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v6
         with:
           name: entra-daily-report
