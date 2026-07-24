@@ -334,6 +334,7 @@ async function rowsFromPublishBatches(repo, token, sinceIso, untilIso, pathPrefi
         publishedVia: extractPublishedVia(batch.commit?.message || ""),
         createdAt,
         commitUrl: batch.html_url,
+        shortSha: batch.sha.slice(0, 7),
         msLearnUrl,
         sourceUrl
       });
@@ -516,9 +517,9 @@ function buildDigestItem(row) {
   const primaryUrl = row.msLearnUrl || row.sourceUrl || "";
   const extraLinks = [];
   if (row.msLearnUrl && row.sourceUrl) {
-    extraLinks.push(mdLink("source", row.sourceUrl));
+    extraLinks.push(mdLink("📄 source", row.sourceUrl));
   }
-  extraLinks.push(mdLink("commit", row.commitUrl));
+  extraLinks.push(mdLink(`🔗 ${row.shortSha}`, row.commitUrl));
 
   const titleLine = primaryUrl
     ? `- **[${escMd(row.title)}](${primaryUrl})**`
