@@ -324,10 +324,12 @@ async function rowsFromPublishBatches(repo, token, sinceIso, untilIso, pathPrefi
       // "How To Transfer Authenticator New Phone".
       const fileName = filePath.split("/").pop() || filePath;
       const title = titleCase(fileName.replace(/\.md$/i, ""));
+      const description = await getFileDescription(repo, filePath, untilIso, token);
 
       rows.push({
         subcategory,
         title,
+        description,
         fileName,
         repo,
         author: batch.commit?.committer?.name || batch.author?.login || "learn-build-service",
@@ -355,6 +357,22 @@ function groupRows(rows) {
 async function getCommitDetails(repo, sha, token) {
   const url = `${GITHUB_API}/repos/${repo}/commits/${sha}`;
   return fetchJson(url, token);
+}
+
+// The batch/merge commit's own message never explains why a specific file
+// changed - "Merging changes synced from ..." is the same for every file in
+// the batch. Path-filtering the commits API instead returns the actual
+// author commit for that one file (GitHub's path filter walks first-parent
+// history and skips merges, which is normally a problem - see
+// listPublishBatches - but is exactly what surfaces the human-written
+// message here). Bounded by `until` so it can't pick up a same-day edit that
+// happened after this batch closed.
+async function getFileDescription(repo, filePath, untilIso, token) {
+  const url = `${GITHUB_API}/repos/${repo}/commits?path=${encodeURIComponent(filePath)}&until=${encodeURIComponent(untilIso)}&per_page=1`;
+  const commits = await fetchJson(url, token);
+  const message = commits?.[0]?.commit?.message || "";
+  const subject = message.split("\n")[0].trim();
+  return subject.replace(/\s*\(#\d+\)\s*$/, "");
 }
 
 function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
@@ -537,9 +555,10 @@ function buildDigestItem(row) {
   }
   extraLinks.push(mdLink(`🔗 ${row.shortSha}`, row.commitUrl));
 
+  const lowerTitle = escMd(row.title).toLowerCase();
   const titleLine = primaryUrl
-    ? `- **[${escMd(row.title)}](${primaryUrl})**`
-    : `- **${escMd(row.title)}**`;
+    ? `- **[${lowerTitle}](${primaryUrl})**`
+    : `- **${lowerTitle}**`;
 
   const metaParts = [toLocalClock(row.createdAt), escMd(row.publishedVia || row.author)];
   if (row.repo.toLowerCase() !== "microsoftdocs/entra-docs") {
@@ -547,7 +566,13 @@ function buildDigestItem(row) {
   }
   metaParts.push(...extraLinks);
 
-  return `${titleLine}\n  ${metaParts.join(" · ")}`;
+  const lines = [titleLine];
+  if (row.description) {
+    lines.push(`  ${escMd(row.description)}`);
+  }
+  lines.push(`  ${metaParts.join(" · ")}`);
+
+  return lines.join("\n");
 }
 
 function buildMarkdownWindow({ grouped, total, sinceIso }) {
