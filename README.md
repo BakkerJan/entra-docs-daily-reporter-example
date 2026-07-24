@@ -6,7 +6,7 @@ The workflow runs once a day at 06:00 UTC, collects updates from Entra docs sour
 
 ## Just Want the Daily Email?
 
-You don't need to fork or run anything. This repo already runs the workflow on its own schedule - click **Watch** at the top of this page -> **All Activity**, and you'll get the same daily report emails as everyone else watching it. No Actions minutes, no secrets, no setup.
+You don't need to fork or run anything. This repo already runs the workflow on its own schedule - click **Watch** at the top of this page -> **Custom** -> check **Issues** -> **Apply**, and you'll get the same daily report emails as everyone else watching it, without also getting notified about PRs, releases, or anything else that might land in this repo later. No Actions minutes, no secrets, no setup.
 
 The tradeoff: you're relying on this repo staying up, and on its current schedule/timezone/tracked sources. Fork it (below) if you want an independent copy or different settings.
 
@@ -16,7 +16,7 @@ The tradeoff: you're relying on this repo staying up, and on its current schedul
 2. In GitHub, open **Settings** -> **General** -> **Features** and make sure **Issues** is enabled for the repository.
 3. Open **Actions** and run **Entra Docs Daily Reporter** with **Run workflow**.
 4. Open the created issue titled `Daily Entra Docs PR Report - YYYY-MM-DD`.
-5. If you forked into your own account, you're done - GitHub automatically watches repos you own, and that's what actually delivers the email, not the per-issue **Subscribe** button (a new issue is created every day, so subscribing to just one never covers the next day's). If you're running this under an org or shared account, click **Watch** at the top of the repo and choose **All Activity**.
+5. If you forked into your own account, you're done - GitHub automatically watches repos you own, and that's what actually delivers the email, not the per-issue **Subscribe** button (a new issue is created every day, so subscribing to just one never covers the next day's). If you're running this under an org or shared account, click **Watch** at the top of the repo -> **Custom** -> check **Issues** -> **Apply**.
 6. You now receive daily updates through GitHub notification email.
 
 ## What You Get

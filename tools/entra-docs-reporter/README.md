@@ -54,7 +54,7 @@ Make sure these are enabled so mail is delivered by GitHub notifications:
 This workflow creates a **new issue every day**, so subscribing to a single issue (clicking "Subscribe" on it) only ever covers that one day - it does nothing for tomorrow's issue. What actually delivers a recurring daily email is your **repository-level Watch setting**, not per-issue subscriptions:
 
 1. If you own this repo (forked it into your own account), you're already covered - GitHub automatically watches repos you own. No action needed.
-2. If it's someone else's repo, click **Watch** at the top of the repo page and choose **All Activity** (or **Custom** -> **Issues**, to skip PR/discussion noise if the repo ever has any).
+2. If it's someone else's repo, click **Watch** at the top of the repo page -> **Custom** -> check **Issues** -> **Apply**. This scopes notifications to just issues (i.e. the daily reports), skipping any PR/release/discussion noise the repo might pick up later. **All Activity** also works but is broader than needed.
 3. Run workflow_dispatch once to confirm you get the first email.
 4. To stop the emails later, use the same **Watch** dropdown -> **Ignore**. GitHub's REST API only exposes a coarse `subscribed`/`ignored` toggle for this (and repo owners can't fully unwatch their own repo through it - a `PUT .../subscription` with `subscribed: false` silently no-ops), so the granular "Custom" watch types are only configurable from the web UI.
 
