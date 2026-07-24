@@ -4,13 +4,19 @@ Daily GitHub Actions report for Microsoft Entra documentation updates in a stric
 
 The workflow runs once a day at 06:00 UTC, collects updates from Entra docs sources, and posts a formatted GitHub issue so GitHub notifications can email you updates. The report window is an exact, non-overlapping calendar day (midnight to midnight, in the configured timezone), so a late-firing or re-run job always reports the same content instead of duplicating it. When the daily issue already exists, the workflow also adds a refresh comment that includes the latest report so a re-run email is not empty.
 
-## 1-Minute Quick Start
+## Just Want the Daily Email?
+
+You don't need to fork or run anything. This repo already runs the workflow on its own schedule - click **Watch** at the top of this page -> **All Activity**, and you'll get the same daily report emails as everyone else watching it. No Actions minutes, no secrets, no setup.
+
+The tradeoff: you're relying on this repo staying up, and on its current schedule/timezone/tracked sources. Fork it (below) if you want an independent copy or different settings.
+
+## 1-Minute Quick Start (Run Your Own Copy)
 
 1. Fork or clone this repository.
 2. In GitHub, open **Settings** -> **General** -> **Features** and make sure **Issues** is enabled for the repository.
 3. Open **Actions** and run **Entra Docs Daily Reporter** with **Run workflow**.
 4. Open the created issue titled `Daily Entra Docs PR Report - YYYY-MM-DD`.
-5. If this repo is under your own GitHub account, you're done - GitHub automatically watches repos you own, and that's what actually delivers the email, not the per-issue **Subscribe** button (a new issue is created every day, so subscribing to just one never covers the next day's). If it's someone else's repo, click **Watch** at the top of the repo and choose **All Activity**.
+5. If you forked into your own account, you're done - GitHub automatically watches repos you own, and that's what actually delivers the email, not the per-issue **Subscribe** button (a new issue is created every day, so subscribing to just one never covers the next day's). If you're running this under an org or shared account, click **Watch** at the top of the repo and choose **All Activity**.
 6. You now receive daily updates through GitHub notification email.
 
 ## What You Get
