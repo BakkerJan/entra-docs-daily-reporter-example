@@ -508,6 +508,22 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
 </html>`;
 }
 
+// GitHub strips <style> and style="" from issue bodies (web and email alike),
+// so there's no reachable custom color or font here - a fenced code block is
+// the one thing guaranteed to render in a real monospace font everywhere,
+// which is what actually carries an "oldskool" terminal-banner look.
+const CODE_FENCE = "```";
+
+// Draws a plain-ASCII box sized to whatever lines it's given, so the border
+// is always exactly right instead of hand-counted characters going stale
+// the next time the date string is a different length.
+function asciiBox(lines) {
+  const width = Math.max(...lines.map((l) => l.length));
+  const border = `+${"-".repeat(width + 2)}+`;
+  const body = lines.map((l) => `| ${l.padEnd(width)} |`).join("\n");
+  return [CODE_FENCE, border, body, border, CODE_FENCE].join("\n");
+}
+
 // One item = one link (the title, pointing wherever a reader would actually
 // want to click) plus a single indented meta line for everything secondary.
 // No table: a GFM table's columns get resized per-client anyway, so manual
@@ -538,8 +554,9 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
   const dateLabel = toLocalDateLabel(sinceIso);
 
   if (total === 0) {
+    const banner = asciiBox(["ENTRA DOCS :: DAILY DIGEST", `${dateLabel} (${REPORT_TZ})`]);
     return [
-      `**${esc(dateLabel)}** (${esc(REPORT_TZ)})`,
+      banner,
       "",
       "> [!NOTE]",
       "> No Entra documentation updates in this window."
@@ -547,6 +564,12 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
   }
 
   const categoryCount = Object.keys(grouped).length;
+  const banner = asciiBox([
+    "ENTRA DOCS :: DAILY DIGEST",
+    `${dateLabel} (${REPORT_TZ})`,
+    `${total} update${total === 1 ? "" : "s"} across ${categoryCount} area${categoryCount === 1 ? "" : "s"}`
+  ]);
+
   const sections = Object.entries(grouped)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([subcategory, rows]) => {
@@ -555,13 +578,11 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
         .map(buildDigestItem)
         .join("\n");
 
-      return `## ${esc(subcategory)} · ${rows.length}\n\n${items}`;
+      return `## >> ${esc(subcategory.toUpperCase())} [${rows.length}]\n\n${items}`;
     })
     .join("\n\n");
 
-  const summary = `**${esc(dateLabel)}** (${esc(REPORT_TZ)}) · ${total} update${total === 1 ? "" : "s"} across ${categoryCount} area${categoryCount === 1 ? "" : "s"}`;
-
-  return [summary, "", sections].join("\n");
+  return [banner, "", sections].join("\n");
 }
 
 function buildIssueBody({ primarySinceIso, primaryGrouped, primaryTotal }) {
