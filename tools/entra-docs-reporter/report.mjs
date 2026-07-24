@@ -182,6 +182,30 @@ function toLocalTime(iso) {
   return formatter.format(new Date(iso)).replace(",", "");
 }
 
+// Just the clock time (no date, no seconds) - used in the digest, where every
+// item already falls on the single calendar day named in the header.
+function toLocalClock(iso) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  return formatter.format(new Date(iso));
+}
+
+// Human-readable calendar day, e.g. "Thu, 23 Jul 2026".
+function toLocalDateLabel(iso) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TZ,
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+  return formatter.format(new Date(iso));
+}
+
 async function fetchJson(url, token) {
   const response = await fetch(url, {
     headers: {
@@ -303,16 +327,12 @@ async function rowsFromPublishBatches(repo, token, sinceIso, untilIso, pathPrefi
 
       rows.push({
         subcategory,
-        sha: batch.sha,
-        shortSha: batch.sha.slice(0, 7),
         title,
         fileName,
         repo,
         author: batch.commit?.committer?.name || batch.author?.login || "learn-build-service",
         publishedVia: extractPublishedVia(batch.commit?.message || ""),
         createdAt,
-        labels: ["published"],
-        source: "AutoPublish",
         commitUrl: batch.html_url,
         msLearnUrl,
         sourceUrl
@@ -343,7 +363,6 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
       const trs = rows
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .map((row) => {
-          const labels = row.labels.length ? row.labels.join(", ") : "-";
           const sourceLink = row.sourceUrl ? `<a href="${esc(row.sourceUrl)}">source</a>` : "-";
           const learnLink = row.msLearnUrl ? `<a href="${esc(row.msLearnUrl)}">learn</a>` : "-";
           const commitLink = row.commitUrl ? `<a href="${esc(row.commitUrl)}">commit</a>` : "-";
@@ -353,7 +372,6 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
               <td>${esc(row.repo)}</td>
               <td>${esc(row.author)}</td>
               <td>${esc(toLocalTime(row.createdAt))}</td>
-              <td>${esc(labels)}</td>
               <td>${commitLink}</td>
               <td>${learnLink}</td>
               <td>${sourceLink}</td>
@@ -370,7 +388,6 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
               <th>Repository</th>
               <th>Author</th>
               <th>Created (${esc(REPORT_TZ)})</th>
-              <th>Labels</th>
               <th>Commit</th>
               <th>Learn</th>
               <th>Source</th>
@@ -490,65 +507,70 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
 </html>`;
 }
 
-function buildMarkdownWindow({ title, grouped, total, sinceIso, untilIso }) {
-  const sections = Object.entries(grouped)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([subcategory, rows]) => {
-      const tableRows = rows
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map((row) => {
-          const published = `  ${escMd(toLocalTime(row.createdAt))}  `;
-          const publishedVia = `  ${escMd(row.publishedVia || row.author)}  `;
-          const docFile = `  ${escMd(row.fileName || row.title)}  `;
-          const commit = `  ${mdLink("commit", row.commitUrl)}  `;
-          const learn = `  ${mdLink("learn", row.msLearnUrl)}  `;
-          const source = `  ${mdLink("source", row.sourceUrl)}  `;
-          return `|${published}|${publishedVia}|${docFile}|${commit}|${learn}|${source}|`;
-        })
-        .join("\n");
+// One item = one link (the title, pointing wherever a reader would actually
+// want to click) plus a single indented meta line for everything secondary.
+// No table: a GFM table's columns get resized per-client anyway, so manual
+// padding buys nothing, and a fixed row shape reads cleaner than cramped
+// cells in a narrow email pane.
+function buildDigestItem(row) {
+  const primaryUrl = row.msLearnUrl || row.sourceUrl || "";
+  const extraLinks = [];
+  if (row.msLearnUrl && row.sourceUrl) {
+    extraLinks.push(mdLink("source", row.sourceUrl));
+  }
+  extraLinks.push(mdLink("commit", row.commitUrl));
 
-      return `
-## ${esc(subcategory)} (${rows.length})
+  const titleLine = primaryUrl
+    ? `- **[${escMd(row.title)}](${primaryUrl})**`
+    : `- **${escMd(row.title)}**`;
 
-| Published (${esc(REPORT_TZ)}) | Published via | Doc file | Commit | Learn | Source |
-|---|---|---|---|---|---|
-${tableRows}`;
-    })
-    .join("\n\n");
+  const metaParts = [toLocalClock(row.createdAt), escMd(row.publishedVia || row.author)];
+  if (row.repo.toLowerCase() !== "microsoftdocs/entra-docs") {
+    metaParts.push(row.repo.replace(/^microsoftdocs\//i, ""));
+  }
+  metaParts.push(...extraLinks);
+
+  return `${titleLine}\n  ${metaParts.join(" · ")}`;
+}
+
+function buildMarkdownWindow({ grouped, total, sinceIso }) {
+  const dateLabel = toLocalDateLabel(sinceIso);
 
   if (total === 0) {
     return [
-      `## ${title}`,
-      `Window: ${sinceIso} to ${untilIso}`,
-      "No updates in this window."
-    ].join("\n\n");
+      `**${esc(dateLabel)}** (${esc(REPORT_TZ)})`,
+      "",
+      "> [!NOTE]",
+      "> No Entra documentation updates in this window."
+    ].join("\n");
   }
 
-  return [
-    `## ${title}`,
-    `Window: ${sinceIso} to ${untilIso}`,
-    `Total items: ${total}`,
-    "",
-    sections
-  ].join("\n");
+  const categoryCount = Object.keys(grouped).length;
+  const sections = Object.entries(grouped)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([subcategory, rows]) => {
+      const items = rows
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(buildDigestItem)
+        .join("\n");
+
+      return `## ${esc(subcategory)} · ${rows.length}\n\n${items}`;
+    })
+    .join("\n\n");
+
+  const summary = `**${esc(dateLabel)}** (${esc(REPORT_TZ)}) · ${total} update${total === 1 ? "" : "s"} across ${categoryCount} area${categoryCount === 1 ? "" : "s"}`;
+
+  return [summary, "", sections].join("\n");
 }
 
-function buildIssueBody({ primarySinceIso, primaryUntilIso, primaryGrouped, primaryTotal }) {
-  const primary = buildMarkdownWindow({
-    title: "Last 24 Hours",
+function buildIssueBody({ primarySinceIso, primaryGrouped, primaryTotal }) {
+  const body = buildMarkdownWindow({
     grouped: primaryGrouped,
     total: primaryTotal,
-    sinceIso: primarySinceIso,
-    untilIso: primaryUntilIso
+    sinceIso: primarySinceIso
   });
 
-  return [
-    "# Daily Entra Documentation PR Report",
-    "",
-    primary,
-    "",
-    "Generated automatically by GitHub Actions."
-  ].join("\n");
+  return [body, "", "*Generated automatically by GitHub Actions.*"].join("\n");
 }
 
 async function main() {
@@ -610,7 +632,6 @@ async function main() {
   });
   const issueBody = buildIssueBody({
     primarySinceIso,
-    primaryUntilIso,
     primaryGrouped: groupedPrimary,
     primaryTotal: primaryRows.length
   });
