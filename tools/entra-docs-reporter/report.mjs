@@ -235,10 +235,12 @@ async function listPullFiles(repo, number, token) {
 // "Auto Publish – main to live" or "Merging changes synced" batch commits
 // that landed within the time window.  These are the only commits that reflect
 // content becoming live on learn.microsoft.com.
-async function listPublishBatches(repo, token, sinceIso) {
+async function listPublishBatches(repo, token, sinceIso, untilIso) {
   const items = [];
   let page = 1;
   const perPage = 100;
+  const since = new Date(sinceIso);
+  const until = new Date(untilIso);
 
   while (true) {
     const url = `${GITHUB_API}/repos/${repo}/commits?per_page=${perPage}&page=${page}`;
@@ -255,9 +257,18 @@ async function listPublishBatches(repo, token, sinceIso) {
       if (!createdAt) {
         continue;
       }
-      if (new Date(createdAt) < new Date(sinceIso)) {
+      const created = new Date(createdAt);
+      if (created < since) {
         reachedOlder = true;
         break;
+      }
+      // Commits are returned newest-first. Anything at or after the window's
+      // upper bound belongs to a later report day (or a same-day rerun) and
+      // must be skipped, not just left for "next time" - otherwise a run that
+      // fires late (or twice) re-reports items already covered by yesterday's
+      // window, since that window only had a lower bound before this fix.
+      if (created >= until) {
+        continue;
       }
 
       const msg = (c.commit?.message || "").toLowerCase();
@@ -283,8 +294,8 @@ async function listPublishBatches(repo, token, sinceIso) {
 // Expands each publish-batch commit into one row per publishable doc file.
 // Each row carries its own subcategory derived from the file path so the
 // report stays grouped the same way as before.
-async function rowsFromPublishBatches(repo, token, sinceIso) {
-  const batches = await listPublishBatches(repo, token, sinceIso);
+async function rowsFromPublishBatches(repo, token, sinceIso, untilIso) {
+  const batches = await listPublishBatches(repo, token, sinceIso, untilIso);
   const rows = [];
   const seen = new Set();
 
@@ -367,7 +378,7 @@ async function getCommitDetails(repo, sha, token) {
   return fetchJson(url, token);
 }
 
-function buildHtml({ generatedAtIso, sinceIso, grouped, total }) {
+function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
   const sections = Object.entries(grouped)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([subcategory, rows]) => {
@@ -512,7 +523,7 @@ function buildHtml({ generatedAtIso, sinceIso, grouped, total }) {
   <div class="wrap">
     <div class="top">
       <h1>Daily Entra Documentation PR Report</h1>
-      <div class="meta">Window: ${esc(sinceIso)} to ${esc(generatedAtIso)} | Total new PRs: ${total}</div>
+      <div class="meta">Window: ${esc(sinceIso)} to ${esc(untilIso)} | Generated: ${esc(generatedAtIso)} | Total new PRs: ${total}</div>
     </div>
     <div class="content">
       ${body}
@@ -523,7 +534,7 @@ function buildHtml({ generatedAtIso, sinceIso, grouped, total }) {
 </html>`;
 }
 
-function buildMarkdownWindow({ title, grouped, total, sinceIso, generatedAtIso }) {
+function buildMarkdownWindow({ title, grouped, total, sinceIso, untilIso }) {
   const sections = Object.entries(grouped)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([subcategory, rows]) => {
@@ -553,27 +564,27 @@ ${tableRows}`;
   if (total === 0) {
     return [
       `## ${title}`,
-      `Window: ${sinceIso} to ${generatedAtIso}`,
+      `Window: ${sinceIso} to ${untilIso}`,
       "No updates in this window."
     ].join("\n\n");
   }
 
   return [
     `## ${title}`,
-    `Window: ${sinceIso} to ${generatedAtIso}`,
+    `Window: ${sinceIso} to ${untilIso}`,
     `Total items: ${total}`,
     "",
     sections
   ].join("\n");
 }
 
-function buildIssueBody({ generatedAtIso, primarySinceIso, primaryGrouped, primaryTotal }) {
+function buildIssueBody({ primarySinceIso, primaryUntilIso, primaryGrouped, primaryTotal }) {
   const primary = buildMarkdownWindow({
     title: "Last 24 Hours",
     grouped: primaryGrouped,
     total: primaryTotal,
     sinceIso: primarySinceIso,
-    generatedAtIso
+    untilIso: primaryUntilIso
   });
 
   return [
@@ -596,10 +607,13 @@ async function main() {
 
   const lookbackHours = Number.parseInt(getEnv("LOOKBACK_HOURS", "24"), 10);
 
-  // Anchor the lookback window to midnight (Amsterdam) of the current calendar day
-  // rather than "now minus N hours".  This ensures that both the scheduled 07:00
-  // run and a manual workflow_dispatch triggered later the same day always query
-  // the same time range (yesterday midnight → today midnight, Amsterdam time).
+  // Anchor the window to midnight (Amsterdam) of the current calendar day, with
+  // an explicit upper bound at that same midnight.  This makes the window an
+  // exact, non-overlapping 24h slice (yesterday midnight -> today midnight,
+  // Amsterdam time) no matter when the job actually runs - a scheduled run
+  // fired late, or a manual workflow_dispatch run later the same day, always
+  // reports exactly the same content instead of re-including items already
+  // covered by the previous day's report.
   // Note: the workflow sets TZ=Europe/Amsterdam so Node.js local-time operations
   // (new Date(year, month, day)) resolve to Amsterdam midnight in UTC.
   const todayAmsterdamStr = new Intl.DateTimeFormat("sv-SE", {
@@ -610,13 +624,20 @@ async function main() {
   }).format(generatedAt);
   const [amsYear, amsMonth, amsDay] = todayAmsterdamStr.split("-").map(Number);
   const midnightTodayAmsterdam = new Date(amsYear, amsMonth - 1, amsDay, 0, 0, 0, 0);
-  const primarySince = new Date(midnightTodayAmsterdam.getTime() - lookbackHours * 60 * 60 * 1000);
+  // When the lookback is a whole number of days, step back by calendar days
+  // rather than subtracting fixed milliseconds, so the two DST-transition
+  // days a year (23h/25h local days) don't shift the window by an hour.
+  const primarySince = lookbackHours % 24 === 0
+    ? new Date(amsYear, amsMonth - 1, amsDay - lookbackHours / 24, 0, 0, 0, 0)
+    : new Date(midnightTodayAmsterdam.getTime() - lookbackHours * 60 * 60 * 1000);
   const primarySinceIso = primarySince.toISOString();
+  const primaryUntilIso = midnightTodayAmsterdam.toISOString();
 
   const publishRows = await rowsFromPublishBatches(
     "MicrosoftDocs/entra-docs",
     githubToken,
-    primarySinceIso
+    primarySinceIso,
+    primaryUntilIso
   );
 
   const primaryRows = publishRows;
@@ -625,12 +646,13 @@ async function main() {
   const html = buildHtml({
     generatedAtIso,
     sinceIso: primarySinceIso,
+    untilIso: primaryUntilIso,
     grouped: groupedPrimary,
     total: primaryRows.length
   });
   const issueBody = buildIssueBody({
-    generatedAtIso,
     primarySinceIso,
+    primaryUntilIso,
     primaryGrouped: groupedPrimary,
     primaryTotal: primaryRows.length
   });
@@ -654,7 +676,8 @@ async function main() {
     label: getEnv("ISSUE_LABEL", "entra-docs-report"),
     total24h: primaryRows.length,
     generatedAtIso,
-    primarySinceIso
+    primarySinceIso,
+    primaryUntilIso
   };
 
   const metadataOutputPath = getEnv("REPORT_METADATA_OUTPUT", "report-output/entra-daily-report.json");
