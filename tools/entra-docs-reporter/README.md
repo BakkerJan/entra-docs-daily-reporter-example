@@ -45,18 +45,18 @@ No custom SMTP secrets are required.
 
 Make sure these are enabled so mail is delivered by GitHub notifications:
 
-- You are watching the repository (or at least subscribed to report issues)
+- You are watching the repository (see below - this is what actually matters, not per-issue subscribe)
 - Notification email is enabled in GitHub account settings
 - The workflow has issue write permission (already configured)
 
 ## How to make it email you daily
 
-GitHub sends issue notifications to subscribers/watchers. To ensure you get this report in email:
+This workflow creates a **new issue every day**, so subscribing to a single issue (clicking "Subscribe" on it) only ever covers that one day - it does nothing for tomorrow's issue. What actually delivers a recurring daily email is your **repository-level Watch setting**, not per-issue subscriptions:
 
-1. Set watch level to custom and include issues for this repository.
-2. Run workflow_dispatch once.
-3. Open the created report issue and click Subscribe if needed.
-4. You will receive future daily report updates by email from GitHub notifications.
+1. If you own this repo (forked it into your own account), you're already covered - GitHub automatically watches repos you own. No action needed.
+2. If it's someone else's repo, click **Watch** at the top of the repo page and choose **All Activity** (or **Custom** -> **Issues**, to skip PR/discussion noise if the repo ever has any).
+3. Run workflow_dispatch once to confirm you get the first email.
+4. To stop the emails later, use the same **Watch** dropdown -> **Ignore**. GitHub's REST API only exposes a coarse `subscribed`/`ignored` toggle for this (and repo owners can't fully unwatch their own repo through it - a `PUT .../subscription` with `subscribed: false` silently no-ops), so the granular "Custom" watch types are only configurable from the web UI.
 
 If you want a mailbox rule for the report, filter on issue title prefix: Daily Entra Docs PR Report.
 
@@ -89,5 +89,5 @@ If you want to share this publicly so others can copy it, publish these files:
 Then include this quick-start snippet in your blog or docs:
 
 ```text
-Copy the workflow + script, run workflow_dispatch once, and subscribe to the generated issue. GitHub notifications will then email daily report updates once a day.
+Copy the workflow + script into your own repo (you'll automatically be watching it) and run workflow_dispatch once. GitHub notifications will then email daily report updates once a day.
 ```

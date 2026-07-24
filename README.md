@@ -10,7 +10,7 @@ The workflow runs once a day at 06:00 UTC, collects updates from Entra docs sour
 2. In GitHub, open **Settings** -> **General** -> **Features** and make sure **Issues** is enabled for the repository.
 3. Open **Actions** and run **Entra Docs Daily Reporter** with **Run workflow**.
 4. Open the created issue titled `Daily Entra Docs PR Report - YYYY-MM-DD`.
-5. Click **Subscribe** on that issue (or watch repo issues).
+5. If this repo is under your own GitHub account, you're done - GitHub automatically watches repos you own, and that's what actually delivers the email, not the per-issue **Subscribe** button (a new issue is created every day, so subscribing to just one never covers the next day's). If it's someone else's repo, click **Watch** at the top of the repo and choose **All Activity**.
 6. You now receive daily updates through GitHub notification email.
 
 ## What You Get
@@ -61,6 +61,7 @@ gh run list --workflow "entra-docs-daily-reporter.yml" --repo <owner>/<repo> --l
 
 - No SMTP provider is required.
 - Delivery is via GitHub notifications, so account notification settings apply.
+- Notifications work at the **repository** level here, not per-issue: this workflow creates a new issue every day, so clicking Subscribe on one issue only ever covers that one day. What actually delivers the recurring email is your repo-level Watch setting (owners watch their own repos by default). To stop the emails, use the **Watch** dropdown on the repo -> **Ignore**, or **Custom** and uncheck **Issues** - GitHub's API doesn't expose that level of control, only the web UI does.
 
 ## Troubleshooting
 
