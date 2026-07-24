@@ -315,9 +315,7 @@ async function rowsFromPublishBatches(repo, token, sinceIso, untilIso, pathPrefi
         source: "AutoPublish",
         commitUrl: batch.html_url,
         msLearnUrl,
-        sourceUrl,
-        prUrl: "",
-        url: batch.html_url
+        sourceUrl
       });
     }
   }
@@ -351,7 +349,6 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
           const commitLink = row.commitUrl ? `<a href="${esc(row.commitUrl)}">commit</a>` : "-";
           return `
             <tr>
-              <td><a href="${esc(row.url)}">${esc(row.shortSha)}</a></td>
               <td>${esc(row.title)}</td>
               <td>${esc(row.repo)}</td>
               <td>${esc(row.author)}</td>
@@ -369,7 +366,6 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
         <table>
           <thead>
             <tr>
-              <th>PR</th>
               <th>Title</th>
               <th>Repository</th>
               <th>Author</th>
@@ -388,7 +384,7 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
     .join("\n");
 
   const body = total === 0
-    ? "<p>No new Entra-related documentation pull requests were opened in the last 24 hours.</p>"
+    ? "<p>No new Entra-related documentation updates were published in the last 24 hours.</p>"
     : sections;
 
   return `<!doctype html>
@@ -483,7 +479,7 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
   <div class="wrap">
     <div class="top">
       <h1>Daily Entra Documentation PR Report</h1>
-      <div class="meta">Window: ${esc(sinceIso)} to ${esc(untilIso)} | Generated: ${esc(generatedAtIso)} | Total new PRs: ${total}</div>
+      <div class="meta">Window: ${esc(sinceIso)} to ${esc(untilIso)} | Generated: ${esc(generatedAtIso)} | Total updates: ${total}</div>
     </div>
     <div class="content">
       ${body}
@@ -507,16 +503,15 @@ function buildMarkdownWindow({ title, grouped, total, sinceIso, untilIso }) {
           const commit = `  ${mdLink("commit", row.commitUrl)}  `;
           const learn = `  ${mdLink("learn", row.msLearnUrl)}  `;
           const source = `  ${mdLink("source", row.sourceUrl)}  `;
-          const pr = `  ${mdLink("pr", row.prUrl)}  `;
-          return `|${published}|${publishedVia}|${docFile}|${commit}|${learn}|${source}|${pr}|`;
+          return `|${published}|${publishedVia}|${docFile}|${commit}|${learn}|${source}|`;
         })
         .join("\n");
 
       return `
 ## ${esc(subcategory)} (${rows.length})
 
-| Published (${esc(REPORT_TZ)}) | Published via | Doc file | Commit | Learn | Source | PR |
-|---|---|---|---|---|---|---|
+| Published (${esc(REPORT_TZ)}) | Published via | Doc file | Commit | Learn | Source |
+|---|---|---|---|---|---|
 ${tableRows}`;
     })
     .join("\n\n");
