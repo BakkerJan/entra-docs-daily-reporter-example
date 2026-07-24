@@ -526,29 +526,11 @@ function buildHtml({ generatedAtIso, sinceIso, untilIso, grouped, total }) {
 </html>`;
 }
 
-// GitHub strips <style> and style="" from issue bodies (web and email alike),
-// so there's no reachable custom color or font here - a fenced code block is
-// the one thing guaranteed to render in a real monospace font everywhere,
-// which is what actually carries an "oldskool" terminal-banner look.
-const CODE_FENCE = "```";
-
-// Block-letter "ENTRA DAILY NEWS" wordmark. Column widths were generated
-// programmatically from a per-letter 5-row glyph table and verified (every
-// row is exactly 88 chars) rather than hand-typed, since freehand ASCII art
-// is very easy to get subtly misaligned.
-const LOGO_BANNER = [
-  "#####  #   # ##### ####   ###    ####   ###  ##### #     #   #   #   # ##### #   #  ####",
-  "#      ##  #   #   #   # #   #   #   # #   #   #   #      # #    ##  # #     #   # #    ",
-  "###    # # #   #   ####  #####   #   # #####   #   #       #     # # # ###   # # #  ### ",
-  "#      #  ##   #   #  #  #   #   #   # #   #   #   #       #     #  ## #     ## ##     #",
-  "#####  #   #   #   #   # #   #   ####  #   # ##### #####   #     #   # ##### #   # ####"
-].join("\n");
-
-// Masthead = the static wordmark plus the one line that actually changes
-// day to day. Kept in a single code block so both stay in the same
-// guaranteed-monospace font.
-function buildMasthead(dateline) {
-  return [CODE_FENCE, LOGO_BANNER, "", dateline, CODE_FENCE].join("\n");
+// Capitalizes only the first character, leaving the rest as-is - a plain
+// sentence-case heading rather than title-casing (or upper/lower-casing)
+// every word.
+function toSentenceCase(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
 // One item = one link (the title, pointing wherever a reader would actually
@@ -588,9 +570,8 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
   const dateLabel = toLocalDateLabel(sinceIso);
 
   if (total === 0) {
-    const masthead = buildMasthead(`${dateLabel} (${REPORT_TZ})`);
     return [
-      masthead,
+      `**${esc(dateLabel)}** (${esc(REPORT_TZ)})`,
       "",
       "> [!NOTE]",
       "> No Entra documentation updates in this window."
@@ -598,9 +579,7 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
   }
 
   const categoryCount = Object.keys(grouped).length;
-  const masthead = buildMasthead(
-    `${dateLabel} (${REPORT_TZ}) · ${total} update${total === 1 ? "" : "s"} across ${categoryCount} area${categoryCount === 1 ? "" : "s"}`
-  );
+  const summary = `**${esc(dateLabel)}** (${esc(REPORT_TZ)}) · ${total} update${total === 1 ? "" : "s"} across ${categoryCount} area${categoryCount === 1 ? "" : "s"}`;
 
   const sections = Object.entries(grouped)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -610,11 +589,11 @@ function buildMarkdownWindow({ grouped, total, sinceIso }) {
         .map(buildDigestItem)
         .join("\n");
 
-      return `## ${esc(subcategory.toLowerCase())} · ${rows.length}\n\n${items}`;
+      return `## ${esc(toSentenceCase(subcategory))} · ${rows.length}\n\n${items}`;
     })
     .join("\n\n");
 
-  return [masthead, "", sections].join("\n");
+  return [summary, "", sections].join("\n");
 }
 
 function buildIssueBody({ primarySinceIso, primaryGrouped, primaryTotal }) {
