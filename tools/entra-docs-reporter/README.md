@@ -2,7 +2,7 @@
 
 This example publishes a **daily report at 06:00 UTC** with Entra documentation updates in a strict **last 24 hours** window (times shown in the report use the `TZ` env var, default `Europe/Amsterdam`).
 
-It posts a grouped Markdown report to a GitHub issue so GitHub notifications can deliver the email.
+It posts a grouped Markdown digest to a GitHub issue so GitHub notifications can deliver the email - a lean, linked-title-plus-meta-line format rather than a Markdown table, since a table's column widths get resized per email client anyway.
 
 ## What this includes
 
@@ -15,10 +15,10 @@ It posts a grouped Markdown report to a GitHub issue so GitHub notifications can
 1. Workflow triggers once a day at 06:00 UTC (plus `workflow_dispatch` for manual runs). The report window is an exact, non-overlapping calendar day in the `TZ` timezone (midnight to midnight), computed from the run date rather than "now minus 24h" - so a late-firing scheduled run or a manual re-run the same day always reproduces the same window and never duplicates content already reported.
 2. Script scans **Auto Publish batch commits** on each repo listed in `PUBLISH_SOURCES` (see `report.mjs`) - by default `MicrosoftDocs/entra-docs` in full, plus `MicrosoftDocs/azure-docs` scoped to `articles/active-directory-b2c/` (Entra External ID / B2C content that hasn't been migrated into entra-docs yet).
    Auto Publish batches are the `"Auto Publish – main to live"` and `"Merging changes synced"` merge commits created by `learn-build-service-prod[bot]`. They batch all content that was merged to `main` since the previous publish and represent the moment docs become live on learn.microsoft.com.
-3. Script queries batch commits directly within the window (`since`/`until`) and expands each one into one row per publishable `.md` file it contains.
+3. Script queries batch commits directly within the window (`since`/`until`) and expands each one into one digest item per publishable `.md` file it contains.
 4. Results are grouped by the top-level folder under `docs/` or `articles/` (e.g. `identity`, `external-id`, `global-secure-access`, `active-directory-b2c`).
-5. For each file, an MS Learn URL and a GitHub source link are generated.
-6. Workflow creates or updates a daily issue with the report body.
+5. For each file, an MS Learn URL and a GitHub source link are generated; the item's title links to whichever of those is available (Learn preferred).
+6. Workflow creates or updates a daily issue with the digest as its body.
 7. If the daily issue already exists, the workflow adds a refresh comment with the latest report content so GitHub still sends an email notification with a non-empty body.
 8. GitHub sends notifications to subscribed users/watchers.
 9. HTML, Markdown, and metadata outputs are uploaded as artifacts.

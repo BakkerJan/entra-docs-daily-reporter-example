@@ -26,15 +26,8 @@ The tradeoff: you're relying on this repo staying up, and on its current schedul
   - `MicrosoftDocs/entra-docs` - all published Entra documentation
   - `MicrosoftDocs/azure-docs` - `active-directory-b2c` (Entra External ID / B2C content not yet migrated into entra-docs)
 - Categories are derived automatically from each doc's folder path (Conditional Access, Authentication, App Provisioning, App Proxy, Hybrid Identity, Devices, Governance, CIEM, and more) - no fixed category list to maintain
-- Each row includes:
-  - Timestamp (configurable timezone, default Europe/Amsterdam)
-  - Author
-  - PR/Commit number and title
-  - Commit URL
-  - **MS Learn URL** (when document is published to Learn)
-  - PR URL
-- Email-friendly Markdown tables with padding for readability
-- Uploaded artifacts: `html`, `md`, `json`
+- A lean, non-tabular digest instead of a Markdown table (table columns get resized per-client anyway, so nothing is gained by trying to align them): each item is a linked title (MS Learn page, or the source file if not yet on Learn) plus one meta line with the local timestamp, how it was published, and any secondary links
+- Uploaded artifacts: `html` (a full data table, for anyone who wants one), `md` (the digest, this is what becomes the issue body), `json` (machine-readable metadata, including the exact window bounds)
 
 ## Repo Structure
 
